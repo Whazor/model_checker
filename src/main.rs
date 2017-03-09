@@ -22,6 +22,9 @@ use rustyline::error::ReadlineError;
 use rustyline::completion::FilenameCompleter;
 use rustyline::{Config, CompletionType, Editor};
 
+extern crate stopwatch;
+use stopwatch::{Stopwatch};
+
 fn main() {    
     let mut aut = None;
     let config = Config::builder()
