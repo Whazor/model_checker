@@ -70,6 +70,7 @@ fn main() {
                             println!("Now using the naive algorithm");
                         }
                     } else if line.starts_with("open") {
+                        let sw = Stopwatch::start_new();
                         let file_path_string = line.clone().replace("open ", "");
                         let path = Path::new(file_path_string.as_str());
                         let display = path.display();
@@ -89,13 +90,17 @@ fn main() {
                                 }
                             }
                         };
+                        println!("Loading AUT file took {}ms", sw.elapsed_ms());
                     } else {
                         match aut.clone() {
                             Some(aut_result) => {
+                                let sw = Stopwatch::start_new();
                                 let mu = read_mu_formula(line.replace(" ", "").as_str());
+                                println!("Reading MU formula took {}ms", sw.elapsed_ms());
                                 println!("States: {:?}", mu.clone());
                                 match mu {
                                     Ok(mu) => {
+                                        let sw = Stopwatch::start_new();
                                         let result = if use_optimized {
                                             emerson_lei::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap()
                                         } else {
@@ -106,6 +111,7 @@ fn main() {
                                             println!("{:?}", result);
                                         }
                                         println!("Number states from µ-formula: {}, total states: {}", n, aut_result.header.nr_of_states-1);
+                                        println!("Executing formula took {}ms", sw.elapsed_ms());
                                     },
                                     Err(why) => println!("couldn't parse mu: {}", why.description()),
                                 }
