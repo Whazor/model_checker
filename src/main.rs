@@ -2,6 +2,9 @@
 #![plugin(peg_syntax_ext)]
 #![feature(box_syntax)]
 
+extern crate bufstream;
+extern crate regex;
+
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -78,16 +81,17 @@ fn main() {
                         match File::open(&path) {
                             Err(why) => { println!("couldn't open {}: {}", display, why.description()) },
                             Ok(mut file) => {
-                                let mut s = String::new();
-                                match file.read_to_string(&mut s) {
-                                    Err(why) => println!("couldn't read {}: {}", display, why.description()),
-                                    Ok(_) => {
-                                        match read_aut_file(&s) {
-                                            Ok(result) => { aut = Some(result); },
-                                            Err(why) => println!("syntax error {}: {}", display, why)
-                                        }
-                                    }
-                                }
+                                // let mut s = String::new();
+                                // match file.read_to_string(&mut s) {
+                                    // Err(why) => println!("couldn't read {}: {}", display, why.description()),
+                                    // Ok(_) => {
+                                        aut = Some(read_aut_file(file));
+                                        // match read_aut_file(&s) {
+                                            // Ok(result) => { aut = Some(result); },
+                                            // Err(why) => println!("syntax error {}: {}", display, why)
+                                        // }
+                                    // }
+                                // }
                             }
                         };
                         println!("Loading AUT file took {}ms", sw.elapsed_ms());
