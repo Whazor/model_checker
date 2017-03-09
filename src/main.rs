@@ -14,14 +14,13 @@ mod algorithms;
 use algorithms::naive;
 use algorithms::emerson_lei;
 use std::env;
-
+mod utils;
 
 extern crate rustyline;
 
 use rustyline::error::ReadlineError;
 use rustyline::completion::FilenameCompleter;
 use rustyline::{Config, CompletionType, Editor};
-
 
 fn main() {    
     let mut aut = None;
@@ -42,6 +41,7 @@ fn main() {
     println!("Furthermore, you can enter any µ-calculus formula");
 
     let mut args = false;
+    let mut use_optimized = false;
     'outer: loop {
         let readline = if !args {
             args = true;
@@ -59,7 +59,14 @@ fn main() {
                     if line == "quit" || line == "exit" {
                         break 'outer;
                     }
-                    if line.starts_with("open") {
+                    if line == "switch" {
+                        use_optimized = !use_optimized;
+                        if use_optimized {
+                            println!("Now using the Emerson Lei algorithm");
+                        } else {
+                            println!("Now using the naive algorithm");
+                        }
+                    } else if line.starts_with("open") {
                         let file_path_string = line.clone().replace("open ", "");
                         let path = Path::new(file_path_string.as_str());
                         let display = path.display();
@@ -79,25 +86,23 @@ fn main() {
                                 }
                             }
                         };
-
                     } else {
                         match aut.clone() {
                             Some(aut_result) => {
                                 let mu = read_mu_formula(line.replace(" ", "").as_str());
-                                println!("{:?}", mu.clone());
+                                println!("States: {:?}", mu.clone());
                                 match mu {
                                     Ok(mu) => {
-                                        let result = emerson_lei::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap();
+                                        let result = if use_optimized {
+                                            emerson_lei::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap()
+                                        } else {
+                                            naive::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap()
+                                        };
                                         let n = result.clone().len() as u64;
                                         if n < 1000 {
                                             println!("{:?}", result);
                                         }
-                                        if n == aut_result.header.nr_of_states-1 {
-                                            println!("success");
-                                        } else {
-                                            println!("fail {} != {}", n, aut_result.header.nr_of_states-1);
-                                        }
-                                        // 
+                                        println!("Number states from µ-formula: {}, total states: {}", n, aut_result.header.nr_of_states-1);
                                     },
                                     Err(why) => println!("couldn't parse mu: {}", why.description()),
                                 }
