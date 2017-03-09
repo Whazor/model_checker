@@ -14,11 +14,12 @@ pub struct MixedKripkeStructure<S: Hash+Eq+Clone+Copy, L: Clone+Copy> {
 
 pub fn from_aut_to_kripke(aut: &AutFile) -> MixedKripkeStructure<u64, ()> {
     let nr_of_states = aut.header.nr_of_states;
+    let nr_of_transitions = aut.header.nr_of_transitions;
     let mut kripke = MixedKripkeStructure::<u64, ()> { 
-        states: HashSet::<u64>::new(),
-        init_states: HashSet::<u64>::new(),
-        relations: Vec::<(u64, String, u64)>::new(),
-        label: HashMap::<u64, HashSet<()>>::new()
+        states: HashSet::<u64>::with_capacity(nr_of_states),
+        init_states: HashSet::<u64>::with_capacity(1),
+        relations: Vec::<(u64, String, u64)>::with_capacity(nr_of_transitions),
+        label: HashMap::<u64, HashSet<()>>::with_capacity(nr_of_states)
     };
     kripke.states.insert(aut.header.first_state);
     kripke.init_states.insert(aut.header.first_state);

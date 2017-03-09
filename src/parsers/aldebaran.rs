@@ -13,8 +13,8 @@ use stopwatch::{Stopwatch};
 #[derive(Debug, Clone, PartialEq)]
 pub struct AutHeader {
     pub first_state: u64,
-    pub nr_of_transitions: u64,
-    pub nr_of_states: u64
+    pub nr_of_transitions: usize,
+    pub nr_of_states: usize
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,8 +62,8 @@ pub fn read_aut_file(file_stream: File) -> AutFile {
     let cap = re.captures(s.as_str()).unwrap();
     header = Some(AutHeader { 
         first_state: u64::from_str(&cap[1]).unwrap(), 
-        nr_of_transitions: u64::from_str(&cap[2]).unwrap(), 
-        nr_of_states: u64::from_str(&cap[3]).unwrap() });
+        nr_of_transitions: usize::from_str(&cap[2]).unwrap(), 
+        nr_of_states: usize::from_str(&cap[3]).unwrap() });
 
     for line in lines {
         let mut s = line.unwrap();
@@ -71,8 +71,8 @@ pub fn read_aut_file(file_stream: File) -> AutFile {
             s.remove(0);
             s.pop();
             let mut split = s.split(",");
-            let start = 1; u64::from_str(split.next().unwrap().clone()).unwrap();
-            let mut label =  String::from(split.next().unwrap().clone());
+            let start = u64::from_str(split.next().unwrap().clone()).unwrap();
+            let mut label = String::from(split.next().unwrap().clone());
             let end = u64::from_str(split.next().unwrap().clone()).unwrap();
             label.remove(0);
             label.pop();
