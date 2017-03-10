@@ -164,11 +164,9 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
             let mut result = HashSet::new();
             for s in k.states.clone() {
                 let mut insert = true;
-                for pat in &k.relations {
-                    if pat.0 == s && pat.1 == *ac {
-                        if !(states.contains(&pat.2)) {
-                            insert = false;
-                        }
+                for pat in k.relations.get(&(s, String::from(ac.clone()))).unwrap_or(&HashSet::new()) {
+                    if !(states.contains(&pat)) {
+                        insert = false;
                     }
                 }
                 if insert {
@@ -205,7 +203,7 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
                 }
                 _ => {}
             }
-            
+
             if !e.map.contains_key(&c.clone()) {
                 e.map.insert(c.clone(), HashSet::<S>::new());
             }

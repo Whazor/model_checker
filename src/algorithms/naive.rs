@@ -62,11 +62,9 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
             let mut result = HashSet::new();
             for s in k.states.clone() {
                 let mut insert = true;
-                for pat in &k.relations {
-                    if pat.0 == s && pat.1 == *ac {
-                        if !(states.contains(&pat.2)) {
-                            insert = false;
-                        }
+                for pat in k.relations.get(&(s, String::from(ac.clone()))).unwrap_or(&HashSet::new()) {
+                    if !(states.contains(&pat)) {
+                        insert = false;
                     }
                 }
                 if insert {
@@ -85,7 +83,7 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
         // least fixpoint operator
         MuFormula::Mu(_, ref c, ref f) => {
             let mut states = HashSet::<S>::new();
-            let mut nstates = HashSet::<S>::new();//;k.states.clone();
+            let mut nstates = HashSet::<S>::new();
             loop {
                 e.map.insert(c.clone(), nstates.clone());
                 nstates = try!(eval(&k, f, e));

@@ -106,8 +106,8 @@ binaryOr -> MuFormula = p:#position "(" f:formula "||" g:formula ")" { MuFormula
 
 action -> MuFormula = p:#position a:$([a-z_]+) { MuFormula::Action(p, a.to_owned()) };
 
-diamond -> MuFormula = p:#position "<" a:$([a-z_]+) ">" f:formula { MuFormula::DiamondOp(p, a.to_owned(), box f) };
-box -> MuFormula = p:#position "[" a:$([a-z_]+) "]" f:formula { MuFormula::BoxOp(p, a.to_owned(), box f) };
+diamond -> MuFormula = p:#position "<" a:$([a-z_0-9]+) ">" f:formula { MuFormula::DiamondOp(p, a.to_owned(), box f) };
+box -> MuFormula = p:#position "[" a:$([a-z_0-9]+) "]" f:formula { MuFormula::BoxOp(p, a.to_owned(), box f) };
 
 mu_point -> MuFormula = p:#position 'mu' c:$([A-Z]) '.' f:formula { MuFormula::Mu(p, c.to_owned(), box f) };
 nu_point -> MuFormula = p:#position 'nu' c:$([A-Z]) '.' f:formula { MuFormula::Nu(p, c.to_owned(), box f) };

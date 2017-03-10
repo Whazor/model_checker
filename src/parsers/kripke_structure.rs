@@ -7,7 +7,7 @@ use std::hash::Hash;
 pub struct MixedKripkeStructure<S: Hash+Eq+Clone+Copy, L: Clone+Copy> {
     pub states: HashSet<S>,
     pub init_states: HashSet<S>,
-    pub relations: Vec<(S, String, S)>,
+    pub relations: HashMap<(S, String), HashSet<S>>,
     pub label: HashMap<S, HashSet<L>>
 }
 
@@ -18,7 +18,7 @@ pub fn from_aut_to_kripke(aut: &AutFile) -> MixedKripkeStructure<u64, ()> {
     let mut kripke = MixedKripkeStructure::<u64, ()> { 
         states: HashSet::<u64>::with_capacity(nr_of_states * 2),
         init_states: HashSet::<u64>::with_capacity(1),
-        relations: Vec::<(u64, String, u64)>::with_capacity(nr_of_transitions * 2),
+        relations:HashMap::<(u64, String), HashSet<u64>>::with_capacity(nr_of_transitions * 2),
         label: HashMap::<u64, HashSet<()>>::with_capacity(nr_of_states * 2)
     };
     kripke.states.insert(aut.header.first_state);
@@ -26,7 +26,8 @@ pub fn from_aut_to_kripke(aut: &AutFile) -> MixedKripkeStructure<u64, ()> {
     for edge in &aut.edges {
         kripke.states.insert(edge.start_state);
         kripke.states.insert(edge.end_state);
-        kripke.relations.push((edge.start_state, edge.label.clone(), edge.end_state));
+        let rel = kripke.relations.entry((edge.start_state, edge.label.clone())).or_insert(HashSet::<u64>::with_capacity(1));
+        rel.insert(edge.end_state);
     }
     return kripke;
 }
