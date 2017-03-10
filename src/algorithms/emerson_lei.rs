@@ -1,4 +1,4 @@
-use parsers::mucalculus::MuFormula;
+use parsers::mucalculus::{MuFormula, find_children};
 use parsers::kripke_structure::MixedKripkeStructure;
 use std::collections::HashSet;
 use std::collections::HashMap;
@@ -22,69 +22,49 @@ enum Bound { None, Mu(MuFormula), Nu(MuFormula) }
 impl PartialEq for Bound {
     fn eq(&self, other: &Bound) -> bool {
         match self {
-            GFP => match other { GFP => true, _ => false },
-            LFP => match other { LFP => true, _ => false },
-            &Bound::None => match *other { Bound::None => true, _ => false }
+            &Bound::Nu(_) => match *other { Bound::Nu(_) => true, _ => false },
+            &Bound::Mu(_) => match *other { Bound::Mu(_) => true, _ => false },
+            &Bound::None => match *other { 
+                Bound::None => true, _ => false
+             }
         }
     }
 }
 impl Eq for Bound {}
 
 
-fn find_variables(mu: MuFormula, bound: Bound) -> HashMap<MuFormula, Bound> {
+fn find_variables(mu: &MuFormula, bound: Bound) -> HashMap<&MuFormula, Bound> {
     let mut hm = HashMap::new();
-    hm.insert(mu.clone(), bound.clone());
-    match mu.clone() {
+    hm.insert(mu, bound.clone());
+    match *mu {
         // least fixpoint operator
-        MuFormula::Mu(_, c, f) => {
-            hm = merge_map(&find_variables(*f, Bound::Mu(mu)), &hm);
+        MuFormula::Mu(_, _, ref f) => {
+            hm = merge_map(&find_variables(&f, Bound::Mu(mu.clone())), &hm);
         }
         // greatest fixpoint operator
-        MuFormula::Nu(_, c, f) => {
-            hm = merge_map(&find_variables(*f, Bound::Nu(mu)), &hm);
+        MuFormula::Nu(_, _, ref f) => {
+            hm = merge_map(&find_variables(&f, Bound::Nu(mu.clone())), &hm);
         }
-        MuFormula::Not(_, f) | MuFormula::DiamondOp (_,  _, f) | MuFormula::BoxOp (_,  _, f)  => {
-            hm = merge_map(&find_variables(*f, bound), &hm);
+        MuFormula::Not(_, ref f) | MuFormula::DiamondOp (_,  _, ref f) | MuFormula::BoxOp (_,  _, ref f)  => {
+            hm = merge_map(&find_variables(&f, bound), &hm);
         }
-        MuFormula::And(_, f, g) | MuFormula::Or(_, f, g) => {
-            hm = merge_map(&merge_map(&find_variables(*f, bound.clone()), &find_variables(*g, bound)), &hm);
+        MuFormula::And(_, ref f, ref g) | MuFormula::Or(_, ref f, ref g) => {
+            hm = merge_map(&merge_map(&find_variables(&f, bound.clone()), &find_variables(&g, bound)), &hm);
         }
         _ => {}
     }
     return hm;
 }
 
-fn find_children(mu: MuFormula) -> HashSet<MuFormula> {
-    match mu.clone() {
-        // least fixpoint operator
-        MuFormula::Mu(_, c, f) => {
-            return find_children(*f);
-        }
-        // greatest fixpoint operator
-        MuFormula::Nu(_, c, f) => {
-            return find_children(*f);
-        }
-        MuFormula::Not(_, f) | MuFormula::DiamondOp (_,  _, f) | MuFormula::BoxOp (_,  _, f)  => {
-            return find_children(*f);
-        }
-        MuFormula::And(_, f, g) | MuFormula::Or(_, f, g) => {
-            return merge_set(&find_children(*f), &find_children(*g));
-        }
-        _ => {
-            return HashSet::new();
-        }
-    }
-}
-
-fn free_variables(mu: MuFormula, vars: HashMap<MuFormula, Bound>) -> HashSet<String> {
+fn free_variables(mu: &MuFormula, vars: &HashMap<&MuFormula, Bound>) -> HashSet<String> {
     let mut hs = HashSet::new();
-    for var in find_children(mu.clone()) {
+    for var in find_children(mu) {
         match var.clone() {
-            MuFormula::RecursionValue(_, v) => {
+            MuFormula::RecursionValue(_, ref v) => {
                 match vars.get(&var).unwrap_or(&Bound::None) {
                     &Bound::Nu(ref var_mu) | &Bound::Mu(ref var_mu) => {
-                        if *var_mu != mu {
-                            hs.insert(v);
+                        if var_mu != mu {
+                            hs.insert(v.clone());
                         }
                     }
                     _ => {}
@@ -100,18 +80,33 @@ pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'ti
     let mut env = Environment {
         map: &mut HashMap::new()
      };
-    let variables = find_variables(mu.clone(), Bound::None);
+    let variables = find_variables(&mu, Bound::None);
 
     for (key, bound) in variables.clone() {
-        match key {
-            MuFormula::RecursionValue(_, c) => { 
+        match *key {
+            MuFormula::RecursionValue(_, ref c) => { 
                 match bound {
-                    Bound::None => {},
-                    LFP => {
-                        env.map.insert(c, k.states.clone());
-                    },
-                    GFP => {
-                        env.map.insert(c, HashSet::new());
+                    Bound::None => {}
+                    Bound::Mu(mu) => {
+                        match mu {
+                            MuFormula::Mu(_, ref c2, _) => {
+                                if c == c2 {
+                                    env.map.insert(c.clone(), HashSet::new());
+                                }
+                            }
+                            _ => {}
+                        }
+      
+                    }
+                    Bound::Nu(mu) => {
+                        match mu {
+                            MuFormula::Nu(_, ref c2, _) => {
+                                if c == c2 {
+                                    env.map.insert(c.clone(), k.states.clone());
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -119,84 +114,125 @@ pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'ti
         }
     }
 
-    return eval(variables, k, mu, &mut env);
+    return eval(&variables, k, &mu, &mut env);
 }
 
 
 fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
-    vars: HashMap<MuFormula, Bound>,
+    vars: &HashMap<&MuFormula, Bound>,
     k: &'time MixedKripkeStructure<S, L>, 
-    mu: MuFormula, 
+    mu: &MuFormula, 
     e: &'time mut Environment<S>
     ) -> Result<HashSet<S>, MuErrors> {
     
-    return match mu.clone() {
+    return match *mu {
         // logic
-        MuFormula::Bool(_, b) => { 
+        MuFormula::Bool(_, ref b) => { 
             let hs = HashSet::new();
-            if b {
+            if *b {
                 return Ok(k.states.clone());
             }
             return Ok(hs);
         },
-        MuFormula::Not(_, f) => {
-            let result = try!(eval(vars, &k, *f, e));
+        MuFormula::Not(_, ref f) => {
+            let result = try!(eval(vars, &k, f, e));
             return Ok(k.states.difference(&result).cloned().collect());
         },
-        MuFormula::And(_, f, g) => {
-            let left = try!(eval(vars.clone(),&k, *f, e));
-            let right = try!(eval(vars,&k, *g, e));
+        MuFormula::And(_, ref f, ref g) => {
+            let left = try!(eval(vars,&k, f, e));
+            let right = try!(eval(vars,&k, g, e));
             return Ok(left.intersection(&right).cloned().collect());
         },
-        MuFormula::Or(_, f, g) => {
-            let left = try!(eval(vars.clone(),&k, *f, e));
-            let right = try!(eval(vars,&k, *g, e));
+        MuFormula::Or(_, ref f, ref g) => {
+            let left = try!(eval(vars,&k, f, e));
+            let right = try!(eval(vars,&k, g, e));
             return Ok(left.union(&right).cloned().collect());
         },
 
         // CTL
-        MuFormula::Action(_, a) => { 
+        MuFormula::Action(_, _) => { 
             //TODO: implement label function
             Ok(HashSet::new())
         },
-        MuFormula::DiamondOp (_, ac, f) => { 
-            let states = try!(eval(vars,&k, *f, e));
+        MuFormula::DiamondOp (p, ref ac, ref f) => { 
+            eval(vars, &k, 
+                &MuFormula::Not(p, box MuFormula::BoxOp(p, ac.clone(), box MuFormula::Not(p, box *f.clone()))),
+            e)
+        },
+        MuFormula::BoxOp (_, ref ac, ref f) => { 
+            let states = try!(eval(vars, &k, f, e));
             let mut result = HashSet::new();
-            for pat in &k.relations {
-                if states.contains(&pat.2) && pat.1 == ac {
-                    result.insert(pat.0);
+            for s in k.states.clone() {
+                let mut insert = true;
+                for pat in &k.relations {
+                    if pat.0 == s && pat.1 == *ac {
+                        if !(states.contains(&pat.2)) {
+                            insert = false;
+                        }
+                    }
+                }
+                if insert {
+                    result.insert(s);
                 }
             }
             return Ok(result);
         },
-        MuFormula::BoxOp (_, ac, f) => { 
-            let states = try!(eval(vars,&k, *f, e));
-            let mut result = HashSet::new();
-            for pat in &k.relations {
-                if states.contains(&pat.2) && pat.1 == ac {
-                    result.insert(pat.0);
-                }
-            }
-            return Ok(k.states.difference(&result).cloned().collect());
-        },
 
         // mu calculus
-        MuFormula::RecursionValue(_, c) => { 
-            let r = e.map.get(&c).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c));
+        MuFormula::RecursionValue(_, ref c) => { 
+            let r = e.map.get(c).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone()));
             // println!("rec: {:?}", r);
             return r;
         },
 
         // least fixpoint operator
-        MuFormula::Mu(_, c, f) => {
+        MuFormula::Mu(_, ref c, ref f) => {
             // search if bound is GFP
-            match vars.clone().get(&mu).unwrap_or(&Bound::None) {
+            match vars.get(mu).unwrap_or(&Bound::None) {
                 &Bound::Nu(_) => {
                     // find child mu's
                     for child in find_children(mu) {
                         match child.clone() {
                             MuFormula::Mu(_, c2, _) => {
-                                let has_free_variables = free_variables(child, vars.clone()).len() > 0;
+                                let has_free_variables = free_variables(&child, vars).len() > 0;
+                                if has_free_variables {
+                                    e.map.insert(c2, HashSet::<S>::new());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+            
+            if !e.map.contains_key(&c.clone()) {
+                e.map.insert(c.clone(), HashSet::<S>::new());
+            }
+
+            let mut states = HashSet::<S>::new();
+            let mut nstates = HashSet::<S>::new();
+            loop {
+                states = try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
+                nstates = try!(eval(&vars,&k, f, e));
+                e.map.insert((c.clone()), nstates.clone());
+                if states == nstates { 
+                    break; 
+                }
+            }
+            return Ok(states);
+        },
+
+        // greatest fixpMut operator
+        MuFormula::Nu(_, ref c, ref f) => {
+            // search if bound is LFP
+            match vars.clone().get(&mu).unwrap_or(&Bound::None) {
+                &Bound::Mu(_) => {
+                    // find child mu's
+                    for child in find_children(mu) {
+                        match child.clone() {
+                            MuFormula::Nu(_, c2, _) => {
+                                let has_free_variables = free_variables(&child, vars).len() > 0;
                                 if has_free_variables {
                                     e.map.insert(c2, k.states.clone());
                                 }
@@ -208,74 +244,20 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
                 _ => {}
             }
 
-            let mut states = HashSet::<S>::new();  //try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
-            let mut cstates = states.clone();
-            let mut nstates = HashSet::<S>::new();
-            let mut iterations = 0;
-            loop {
-                states = try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or( MuErrors::VarNotFound(c.clone()) ));
-                nstates = try!(eval(vars.clone(), &k, *f.clone(), e));
-                e.map.insert((c.clone()), nstates.clone());
-                states = states.union(&nstates).cloned().collect();
-                if cstates == nstates && states != nstates && iterations > 2  {
-                    panic!("nu formula failed, states are the same! after {} iterations", iterations);
-                } else {
-                    cstates = nstates.clone();
-                    iterations+=1;
-                    if iterations > 10000 {
-                        println!("too long");
-                    }
-                }
-                if states == nstates { 
-                    break; 
-                }
+            if !e.map.contains_key(&c.clone()) {
+                e.map.insert(c.clone(), k.states.clone());
             }
-
-            return Ok(nstates);
-        },
-
-        // greatest fixpMut operator
-        MuFormula::Nu(_, c, f) => {
-            // search if bound is LFP
-            match vars.clone().get(&mu).unwrap_or(&Bound::None) {
-                &Bound::Mu(_) => {
-                    // find child mu's
-                    for child in find_children(mu) {
-                        match child.clone() {
-                            MuFormula::Nu(_, c2, _) => {
-                                let has_free_variables = free_variables(child, vars.clone()).len() > 0;
-                                if has_free_variables {
-                                    e.map.insert(c2, HashSet::<S>::new());
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            }
-            let mut states = HashSet::<S>::new();//try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
+            let mut states = HashSet::<S>::new();
             let mut nstates = HashSet::<S>::new();
-            let mut cstates = states.clone();
-            let mut iterations = 0;
             loop {
                 states = try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
-                nstates = try!(eval(vars.clone(),&k, *f.clone(), e));
+                nstates = try!(eval(&vars,&k, f, e));
                 e.map.insert((c.clone()), nstates.clone());
-                states = states.intersection(&nstates).cloned().collect();
-                if cstates == nstates && states != nstates && iterations > 2  {
-                    panic!("nu formula failed, states are the same! after {} iterations", iterations);
-                } else {
-                    cstates = nstates.clone();
-                    iterations+=1;
-                    if iterations > 10000 {
-                        println!("too long");
-                    }
-                }
                 if states == nstates { 
                     break; 
                 }
             }
+     
             return Ok(states);
         },
     };

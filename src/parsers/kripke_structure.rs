@@ -16,10 +16,10 @@ pub fn from_aut_to_kripke(aut: &AutFile) -> MixedKripkeStructure<u64, ()> {
     let nr_of_states = aut.header.nr_of_states;
     let nr_of_transitions = aut.header.nr_of_transitions;
     let mut kripke = MixedKripkeStructure::<u64, ()> { 
-        states: HashSet::<u64>::with_capacity(nr_of_states),
+        states: HashSet::<u64>::with_capacity(nr_of_states * 2),
         init_states: HashSet::<u64>::with_capacity(1),
-        relations: Vec::<(u64, String, u64)>::with_capacity(nr_of_transitions),
-        label: HashMap::<u64, HashSet<()>>::with_capacity(nr_of_states)
+        relations: Vec::<(u64, String, u64)>::with_capacity(nr_of_transitions * 2),
+        label: HashMap::<u64, HashSet<()>>::with_capacity(nr_of_states * 2)
     };
     kripke.states.insert(aut.header.first_state);
     kripke.init_states.insert(aut.header.first_state);

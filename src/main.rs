@@ -16,6 +16,7 @@ use parsers::kripke_structure::from_aut_to_kripke;
 mod algorithms;
 use algorithms::naive;
 use algorithms::emerson_lei;
+use algorithms::depth::{nesting_depth,alternation_depth,dependent_alternation_depth};
 use std::env;
 mod utils;
 
@@ -48,6 +49,7 @@ fn main() {
 
     let mut args = false;
     let mut use_optimized = false;
+    let total_sw = Stopwatch::start_new();
     'outer: loop {
         let readline = if !args {
             args = true;
@@ -60,7 +62,8 @@ fn main() {
         match readline {
             Ok(lines) => {
                 let arr: Vec<&str> = lines.split(";").collect();
-                for line in arr {
+                for val in arr {
+                    let line = val.trim();
                     rl.add_history_entry(line.clone());
                     if line == "quit" || line == "exit" {
                         break 'outer;
@@ -101,21 +104,31 @@ fn main() {
                                 let sw = Stopwatch::start_new();
                                 let mu = read_mu_formula(line.replace(" ", "").as_str());
                                 println!("Reading MU formula took {}ms", sw.elapsed_ms());
+
                                 println!("States: {:?}", mu.clone());
                                 match mu {
                                     Ok(mu) => {
+                                        let nd = nesting_depth(&mu);
+                                        let ad = alternation_depth(&mu);
+                                        let dad = dependent_alternation_depth(&mu);
+                                        println!("ND: {}, AD: {}, dAD: {}", nd, ad, dad);
+
+                                        let sw = Stopwatch::start_new();
+                                        let kripke = &from_aut_to_kripke(&aut_result);
+                                        println!("Converting to Kripke took {}ms", sw.elapsed_ms());
                                         let sw = Stopwatch::start_new();
                                         let result = if use_optimized {
-                                            emerson_lei::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap()
+                                            emerson_lei::evaluate(kripke, mu).unwrap()
                                         } else {
-                                            naive::evaluate(&from_aut_to_kripke(&aut_result), mu).unwrap()
+                                            naive::evaluate(kripke, mu).unwrap()
                                         };
+                                        println!("Executing formula took {}ms", sw.elapsed_ms());
                                         let n = result.clone().len() as u64;
                                         if n < 1000 {
                                             println!("{:?}", result);
                                         }
-                                        println!("Number states from µ-formula: {}, total states: {}", n, aut_result.header.nr_of_states-1);
-                                        println!("Executing formula took {}ms", sw.elapsed_ms());
+                                        println!("Number states from µ-formula: {}, total states: {}", n, aut_result.header.nr_of_states);
+                                        println!("Total ({},{})",aut_result.header.nr_of_states,total_sw.elapsed_ms());
                                     },
                                     Err(why) => println!("couldn't parse mu: {}", why.description()),
                                 }

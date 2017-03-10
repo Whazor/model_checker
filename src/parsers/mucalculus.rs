@@ -1,7 +1,8 @@
 use std::fmt;
 use std::result;
 use std::string;
-
+use std::collections::HashSet;
+use utils::collections::{merge_map, merge_set};
 use std::hash::{Hash, Hasher, SipHasher};
 
 #[derive(Clone)]
@@ -32,6 +33,27 @@ fn position(mu: &MuFormula) -> usize {
         MuFormula::Nu(p, _, _) => p,
     }
 }
+
+pub fn find_children(mu: &MuFormula) -> HashSet<MuFormula> {
+    match *mu {
+        // least fixpoint operator
+        MuFormula::Mu(_, _, ref f) | MuFormula::Nu(_, _, ref f) | MuFormula::Not(_, ref f) | MuFormula::DiamondOp (_,  _, ref f) | MuFormula::BoxOp (_,  _, ref f)  => {
+            let mut s = HashSet::new();
+            s.insert(*f.clone());
+            return merge_set(&find_children(f), &s);
+        }
+        MuFormula::And(_, ref f, ref g) | MuFormula::Or(_, ref f, ref g) => {
+            let mut s = HashSet::new();
+            s.insert(*f.clone());
+            s.insert(*g.clone());
+            return merge_set(&merge_set(&find_children(f), &find_children(g)), &s);
+        }
+        _ => {
+            return HashSet::new();
+        }
+    }
+}
+
 
 impl Hash for MuFormula {
     fn hash<H: Hasher>(&self, state: &mut H) {
