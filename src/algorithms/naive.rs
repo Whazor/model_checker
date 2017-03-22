@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::fmt::Debug;
 use std::{thread, time};
+use bit_set::BitSet;
 
-
-struct Environment<'time, S: Hash+Eq+Clone+Copy+'time+Debug> {
-    map: &'time mut HashMap<String, HashSet<S>>
+struct Environment<'time> {
+    map: &'time mut HashMap<String, BitSet>
 }
 
-pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time MixedKripkeStructure<S, L>, mu: MuFormula) -> Result<HashSet<S>, MuErrors> {
+pub fn evaluate<'time, L: Clone+Copy>(k: &'time MixedKripkeStructure<L>, mu: MuFormula) -> Result<BitSet, MuErrors> {
     let mut env = Environment {
         map: &mut HashMap::new()
      };
@@ -23,11 +23,11 @@ pub enum MuErrors {
     VarNotFound(String)
 }
 
-fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time MixedKripkeStructure<S, L>, mu: &MuFormula, e: &'time mut Environment<S>) -> Result<HashSet<S>, MuErrors> {
+fn eval<'time, L: Clone+Copy>(k: &'time MixedKripkeStructure<L>, mu: &MuFormula, e: &'time mut Environment) -> Result<BitSet, MuErrors> {
     return match *mu {
         // logic
         MuFormula::Bool(_, b) => { 
-            let hs = HashSet::new();
+            let hs = BitSet::new();
             if b {
                 return Ok(k.states.clone());
             }
@@ -35,22 +35,22 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
         },
         MuFormula::Not(_, ref f) => {
             let result = try!(eval(&k, f, e));
-            return Ok(k.states.difference(&result).cloned().collect());
+            return Ok(k.states.difference(&result).collect::<BitSet>());
         },
         MuFormula::And(_, ref f, ref g) => {
             let left = try!(eval(&k, f, e));
             let right = try!(eval(&k, g, e));
-            return Ok(left.intersection(&right).cloned().collect());
+            return Ok(left.intersection(&right).collect::<BitSet>());
         },
         MuFormula::Or(_, ref f, ref g) => {
             let left = try!(eval(&k, f, e));
             let right = try!(eval(&k, g, e));
-            return Ok(left.union(&right).cloned().collect());
+            return Ok(left.union(&right).collect::<BitSet>());
         },
         // CTL
         MuFormula::Action(_, _) => { 
             //TODO: implement label function
-            Ok(HashSet::new())
+            Ok(BitSet::new())
         },
         MuFormula::DiamondOp (p, ref ac, ref f) => { 
             eval(k, 
@@ -59,16 +59,16 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
         },
         MuFormula::BoxOp (_, ref ac, ref f) => { 
             let states = try!(eval(&k, f, e));
-            let mut result = HashSet::new();
-            for s in k.states.clone() {
+            let mut result = BitSet::new();
+            for s in k.states.into_iter() {
                 let mut insert = true;
-                for pat in k.relations.get(&(s, String::from(ac.clone()))).unwrap_or(&HashSet::new()) {
-                    if !(states.contains(&pat)) {
+                for pat in k.relations.get(&(s as u32, String::from(ac.clone()))).unwrap_or(&BitSet::new()) {
+                    if !(states.contains(pat)) {
                         insert = false;
                     }
                 }
                 if insert {
-                    result.insert(s);
+                    result.insert(s as usize);
                 }
             }
             return Ok(result);
@@ -82,12 +82,12 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
         },
         // least fixpoint operator
         MuFormula::Mu(_, ref c, ref f) => {
-            let mut states = HashSet::<S>::new();
-            let mut nstates = HashSet::<S>::new();
+            let mut states = BitSet::new();
+            let mut nstates = BitSet::new();
             loop {
                 e.map.insert(c.clone(), nstates.clone());
                 nstates = try!(eval(&k, f, e));
-                states = nstates.intersection(&try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())))).cloned().collect();
+                states = nstates.intersection(&try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())))).collect::<BitSet>();
                 if states == nstates { 
                     break; 
                 }
@@ -96,12 +96,12 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time Mixed
         },
         // greatest fixpoint operator
         MuFormula::Nu(_, ref c, ref f) => {
-            let mut states = HashSet::<S>::new();
+            let mut states = BitSet::new();
             let mut nstates = k.states.clone();
             loop {
                 e.map.insert(c.clone(), nstates.clone());
                 nstates = try!(eval(&k, f, e));
-                states = nstates.union(&try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())))).cloned().collect();
+                states = nstates.union(&try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())))).collect::<BitSet>();
                 if states == nstates { 
                     break; 
                 }

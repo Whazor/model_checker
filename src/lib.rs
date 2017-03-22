@@ -8,5 +8,6 @@ mod parsers;
 extern crate regex;
 extern crate bufstream;
 extern crate stopwatch;
+extern crate bit_set;
 
 mod utils;

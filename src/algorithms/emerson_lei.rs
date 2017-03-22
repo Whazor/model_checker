@@ -6,9 +6,10 @@ use std::hash::Hash;
 use std::fmt::Debug;
 use std::{thread, time};
 use utils::collections::{merge_map, merge_set};
+use bit_set::BitSet;
 
-struct Environment<'time, S: Hash+Eq+Clone+Copy+'time+Debug> {
-    map: &'time mut HashMap<String, HashSet<S>>
+struct Environment<'time> {
+    map: &'time mut HashMap<String, BitSet>
 }
 
 #[derive(Debug)]
@@ -76,7 +77,7 @@ fn free_variables(mu: &MuFormula, vars: &HashMap<&MuFormula, Bound>) -> HashSet<
     return hs;
 }
 
-pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'time MixedKripkeStructure<S, L>, mu: MuFormula) -> Result<HashSet<S>, MuErrors> {
+pub fn evaluate<'time, L: Clone+Copy>(k: &'time MixedKripkeStructure<L>, mu: MuFormula) -> Result<BitSet, MuErrors> {
     let mut env = Environment {
         map: &mut HashMap::new()
      };
@@ -91,7 +92,7 @@ pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'ti
                         match mu {
                             MuFormula::Mu(_, ref c2, _) => {
                                 if c == c2 {
-                                    env.map.insert(c.clone(), HashSet::new());
+                                    env.map.insert(c.clone(), BitSet::new());
                                 }
                             }
                             _ => {}
@@ -118,17 +119,17 @@ pub fn evaluate<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(k: &'ti
 }
 
 
-fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
+fn eval<'time, L: Clone+Copy>(
     vars: &HashMap<&MuFormula, Bound>,
-    k: &'time MixedKripkeStructure<S, L>, 
+    k: &'time MixedKripkeStructure<L>, 
     mu: &MuFormula, 
-    e: &'time mut Environment<S>
-    ) -> Result<HashSet<S>, MuErrors> {
+    e: &'time mut Environment
+    ) -> Result<BitSet, MuErrors> {
     
     return match *mu {
         // logic
         MuFormula::Bool(_, ref b) => { 
-            let hs = HashSet::new();
+            let hs = BitSet::new();
             if *b {
                 return Ok(k.states.clone());
             }
@@ -136,23 +137,23 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
         },
         MuFormula::Not(_, ref f) => {
             let result = try!(eval(vars, &k, f, e));
-            return Ok(k.states.difference(&result).cloned().collect());
+            return Ok(k.states.difference(&result).collect::<BitSet>());
         },
         MuFormula::And(_, ref f, ref g) => {
             let left = try!(eval(vars,&k, f, e));
             let right = try!(eval(vars,&k, g, e));
-            return Ok(left.intersection(&right).cloned().collect());
+            return Ok(left.intersection(&right).collect::<BitSet>());
         },
         MuFormula::Or(_, ref f, ref g) => {
             let left = try!(eval(vars,&k, f, e));
             let right = try!(eval(vars,&k, g, e));
-            return Ok(left.union(&right).cloned().collect());
+            return Ok(left.union(&right).collect::<BitSet>());
         },
 
         // CTL
         MuFormula::Action(_, _) => { 
             //TODO: implement label function
-            Ok(HashSet::new())
+            Ok(BitSet::new())
         },
         MuFormula::DiamondOp (p, ref ac, ref f) => { 
             eval(vars, &k, 
@@ -161,16 +162,16 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
         },
         MuFormula::BoxOp (_, ref ac, ref f) => { 
             let states = try!(eval(vars, &k, f, e));
-            let mut result = HashSet::new();
-            for s in k.states.clone() {
+            let mut result = BitSet::new();
+            for s in k.states.into_iter() {
                 let mut insert = true;
-                for pat in k.relations.get(&(s, String::from(ac.clone()))).unwrap_or(&HashSet::new()) {
-                    if !(states.contains(&pat)) {
+                for pat in k.relations.get(&(s as u32, String::from(ac.clone()))).unwrap_or(&BitSet::new()) {
+                    if !(states.contains(*&pat as usize)) {
                         insert = false;
                     }
                 }
                 if insert {
-                    result.insert(s);
+                    result.insert(s as usize);
                 }
             }
             return Ok(result);
@@ -194,7 +195,7 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
                             MuFormula::Mu(_, c2, _) => {
                                 let has_free_variables = free_variables(&child, vars).len() > 0;
                                 if has_free_variables {
-                                    e.map.insert(c2, HashSet::<S>::new());
+                                    e.map.insert(c2, BitSet::new());
                                 }
                             }
                             _ => {}
@@ -205,11 +206,11 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
             }
 
             if !e.map.contains_key(&c.clone()) {
-                e.map.insert(c.clone(), HashSet::<S>::new());
+                e.map.insert(c.clone(), BitSet::new());
             }
 
-            let mut states = HashSet::<S>::new();
-            let mut nstates = HashSet::<S>::new();
+            let mut states = BitSet::new();
+            let mut nstates = BitSet::new();
             loop {
                 states = try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
                 nstates = try!(eval(&vars,&k, f, e));
@@ -245,8 +246,8 @@ fn eval<'time, S: Hash+Eq+Clone+Copy+'time+Debug, L: Clone+Copy>(
             if !e.map.contains_key(&c.clone()) {
                 e.map.insert(c.clone(), k.states.clone());
             }
-            let mut states = HashSet::<S>::new();
-            let mut nstates = HashSet::<S>::new();
+            let mut states = BitSet::new();
+            let mut nstates = BitSet::new();
             loop {
                 states = try!(e.map.get(&(c.clone())).map(|r| (*r).clone()).ok_or(MuErrors::VarNotFound(c.clone())));
                 nstates = try!(eval(&vars,&k, f, e));

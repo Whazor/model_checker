@@ -4,6 +4,7 @@
 
 extern crate bufstream;
 extern crate regex;
+extern crate bit_set;
 
 use std::error::Error;
 use std::fs::File;
